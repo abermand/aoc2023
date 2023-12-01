@@ -5,11 +5,14 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [[bin]]
-name = "part1"
+name = "day1-part1"
 path = "src/part1.rs"
 
 [[bin]]
-name = "part2"
+name = "day1-part2"
 path = "src/part2.rs"
 
 [dependencies]
+aho-corasick = "1.1.2"
+lazy_static = "1.4.0"
+regex = "1.10.2"
