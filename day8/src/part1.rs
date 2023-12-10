@@ -1,34 +1,27 @@
 use lazy_static::lazy_static;
 use regex::Regex;
 use nom::{
-    Parser,
     IResult,
     multi::*,
     bytes::complete::tag,
-    character::complete::{self, alpha1 },
-    sequence::{delimited, preceded, terminated, separated_pair},
-    combinator::{cut,rest},
+    character::complete::alpha1,
+    sequence::delimited,
 };
-//use nom_supreme::{tag::complete::tag, ParserExt};
 
-use std::cmp;
 use std::collections::HashMap;
-//use rstest::*;
 
 lazy_static! {
     static ref NUMBERS_REGEX : Regex = Regex::new(r"(\d+)").unwrap();
-    //static ref SYMBOLS_REGEX : Regex = Regex::new(r"[^0-9.]").unwrap();
-    //static ref MAP_REGEX: Regex = Regex::new(r"(\S+)-to-(\S+) map:").unwrap();
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 struct Map<'a> {
     key: &'a str, 
     left: &'a str, 
     right: &'a str,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 enum Direction {
     Left, 
     Right,
@@ -42,13 +35,20 @@ fn main() {
     dbg!(output);
 }
 
+
+fn parse_list(list: &str) -> IResult<&str, Vec<&str>> {
+        separated_list1(tag(", "), alpha1)(list)
+}
+
+
 fn parse_map_line(line: &str) -> Map {
-    let (_input, (key, therest)) = separated_pair(cut(alpha1), tag(" = "), rest)(line).expect("parsing_error");
-    let (_input, directions) = delimited(
+    let (key, therest) = line.split_once(" = ").unwrap();
+
+    let (_input, directions) : (&str, Vec<&str>) = delimited(
         tag("("),
-        separated_list1(tag(", "), alpha1),
+        parse_list,
         tag(")")
-        ) (the).expect("parsing error");
+        ) (therest).expect("parsing error");
     let left = directions[0];
     let right = directions[1];
     println!("New map: k={} l={} r={}", &key, &left, &right);
@@ -60,15 +60,28 @@ fn parse_input(input: &str) -> (Pattern , HashMap<&str, Map>) {
     let pattern : Pattern = header.chars().map(|c| if c == 'L' { Direction::Left } else { Direction::Right }).collect();
     println!("Pattern: {:?}", &pattern);
     let maps : Vec<Map> = rest.lines().map(parse_map_line).collect();
-    let maps : HashMap<&str, Map> = maps.map(|m| (m.key.clone(), m))
-        .collect::<HashMap<_,_>>();
-    (pattern, maps)
+    let hashmap : HashMap<&str, Map> = maps.iter().map(|m| (m.key, *m))
+        .collect();
+    (pattern, hashmap)
 }
 
 fn do_the_job(input: &str) -> u32 {
-    let (_pattern, _map) = parse_input(&input);
-    todo!();
-    123
+    let (pattern, maps) = parse_input(&input);
+    let mut current = "AAA";
+    let mut rounds = 1;
+    for dir in pattern.iter().cycle() {
+        let map = maps.get(current).unwrap();
+        if *dir == Direction::Left {
+            current = map.left;
+        } else {
+            current = map.right;
+        }
+        if current == "ZZZ" {
+            break;
+        }
+        rounds = rounds + 1;
+    }
+    rounds
 }
 
 
