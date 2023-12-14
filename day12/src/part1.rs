@@ -10,9 +10,7 @@ use regex::Regex;
 // };
 //use nom_supreme::{tag::complete::tag, ParserExt};
 
-use std::cmp;
-// use std::collections::HashMap;
-//use rstest::*;
+use rstest::*;
 
 lazy_static! {
     static ref NUMBERS_REGEX : Regex = Regex::new(r"(\d+)").unwrap();
@@ -21,8 +19,17 @@ lazy_static! {
 }
 
 #[derive(Debug)]
-struct Struct {
-    }
+enum State {
+    Works,
+    Faulty,
+    Unknown
+}
+
+#[derive(Debug)] 
+struct LineMap {
+    states: Vec<State>,
+    faults: Vec<u64>,
+}
 
 fn main() {
     let input = include_str!("./sample2.txt");
@@ -31,14 +38,74 @@ fn main() {
 }
 
 
-fn parse_input(input: &str) -> Struct {
-    Struct {}
+fn parse_input(input: &str) -> Vec<LineMap> {
+    let mut maps : Vec<LineMap> = vec![];
+    
+    for line in input.lines() {        
+        let (left, right) = line.split_once(" ").unwrap();
+        let states : Vec<State>= left.chars().map(|c| match c {
+            '?' => State::Unknown,
+            '#' => State::Faulty,
+            _ => State::Works,
+        }).collect();
+        let faults : Vec<u64> = right.split(",").map(|x| x.parse::<u64>().unwrap()).collect();
+
+        maps.push(LineMap{states, faults});
+    }
+    maps
 }
 
-fn do_the_job(input: &str) -> u32 {
-    let _s = parse_input(&input);
-    todo!();
-    123
+fn reduce(states: &[State], faults: &[u64], expected: u64, indent: usize) -> u64 {
+    let pad = " ".repeat(2*indent);
+    println!("{}Reduce S={:?}, F={:?} e={}", pad, &states, &faults, &expected);
+    if states.len() == 0 {
+        return 0;
+    }
+    match states[0] {
+        State::Works => {
+            if expected > 0 {
+                return 0;
+            } else {
+                if faults.len() == 0 {
+                    return 1;
+                }
+                return reduce(&states[1..], faults, 0, indent+1);
+            }
+        },
+        State::Faulty => {
+            if expected > 0 {
+                return reduce(&states[1..], faults, expected - 1, indent+1)
+            }
+            if faults.len() == 0 {
+                return 0;
+            }
+            let expected = faults[0];
+            reduce(&states[1..], &faults[1..], expected-1, indent+1)
+        },
+        State::Unknown => {
+            if expected > 0 { // in that case it can only be faulty, so look forward 
+                return reduce(&states[1..], faults, expected - 1, indent+1);
+            }
+            if faults.len() == 0 { // in that case it can only be working and we have only one choice
+                return 1;
+            }
+            // otherwise, we have two choices:
+            println!("{}Two choices here ------", pad);
+            let choice_working = reduce(&states[1..], faults, 0, indent+1);
+            let choice_faulty = reduce(&states[1..], &faults[1..], faults[0] - 1, indent+1);
+            println!("{}------ returning: {} + {}", pad, &choice_working, &choice_faulty);
+            return choice_faulty + choice_working;
+        }
+    }
+}
+
+fn do_the_job(input: &str) -> u64 {
+    let s = parse_input(&input); 
+    let result : u64 = s.iter().map(|map| {
+        println!("\n---- LINE ----\n");
+        reduce(&map.states, &map.faults, 0,0)
+    }).sum();
+    result
 }
 
 
@@ -46,19 +113,22 @@ fn do_the_job(input: &str) -> u32 {
 mod tests {
     use super::*;
 
-    #[test]
-    fn it_works() {
-        let input = include_str!("./sample1.txt");
-        let result = do_the_job(input);
-        assert_eq!(result, 456);
-    }
+    // #[test]
+    // fn it_works() {
+    //     let input = include_str!("./sample1.txt");
+    //     let result = do_the_job(input);
+    //     assert_eq!(result, 21);
+    // }
 
-    //    #[rstest]
-    //   #[case("Game 95: 1 blue, 11 red; 15 red, 1 blue, 3 green; 13 red, 2 blue, 3 green; 1 green, 1 blue", false)]
-    //#[case("Game 98: 8 red, 12 green, 2 blue; 7 green, 8 red, 1 blue; 2 blue, 6 red, 3 green; 9 red, 1 blue, 4 green", true)]
-    //#[case("Game 5: 17 red, 5 blue, 3 green; 8 green, 9 red, 10 blue; 2 green, 9 blue, 4 red", false)]
-    //fn is_game_possible(#[case] line: &str, #[case] expected: bool) {
-    //let game = Game::parse_line(line);
-    //assert_eq!(game.is_possible(), expected);
-    //}
+    #[rstest]
+    #[case("???.### 1,1,3", 1)]
+    // #[case(".??..??...?##. 1,1,3", 4)]
+    // #[case("?#?#?#?#?#?#?#? 1,3,1,6", 1)]
+    // #[case("????.#...#... 4,1,1", 1)]
+    // #[case("????.######..#####. 1,6,5", 4)]
+    // #[case("?###???????? 3,2,1", 10)]
+    fn test_expand(#[case] line: &str, #[case] expected: u64) {
+        let result = do_the_job(line);
+        assert_eq!(result, expected);
+    }
 }
